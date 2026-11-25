@@ -1,0 +1,515 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private authenticated account record containing user PII and role.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["player", "admin"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["uid", "role", "createdAt"]
+    },
+    "OperativeSave": {
+      "title": "OperativeSave",
+      "description": "Owner-private complete RPG campaign state persisted in cloud.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "codename": { "type": "string" },
+        "factionId": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "level": { "type": "number" },
+        "prestigeRank": { "type": "number" },
+        "saveJson": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["uid", "codename", "factionId", "level", "saveJson", "updatedAt"]
+    },
+    "PublicOperative": {
+      "title": "PublicOperative",
+      "description": "Non-PII public combat and leaderboard profile for PvP raids and Hall of Shadows.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "codename": { "type": "string" },
+        "factionId": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "subSpecId": { "type": "string" },
+        "level": { "type": "number" },
+        "prestigeRank": { "type": "number" },
+        "powerScore": { "type": "number" },
+        "arenaRating": { "type": "number" },
+        "defenseScore": { "type": "number" },
+        "vaultGold": { "type": "number" },
+        "clanId": { "type": "string" },
+        "clanName": { "type": "string" },
+        "referralCode": { "type": "string" },
+        "nameFrame": { "type": "string" },
+        "seasonMedals": { "type": "number" },
+        "equippedWeaponId": { "type": "string" },
+        "equippedArmorId": { "type": "string" },
+        "equippedRelicId": { "type": "string" },
+        "activeCompanionId": { "type": "string" },
+        "attackStat": { "type": "number" },
+        "defenseStat": { "type": "number" },
+        "agilityStat": { "type": "number" },
+        "masteryStat": { "type": "number" },
+        "influenceStat": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["uid", "codename", "factionId", "level", "prestigeRank", "powerScore", "arenaRating", "defenseScore", "vaultGold", "updatedAt"]
+    },
+    "Clan": {
+      "title": "Clan",
+      "description": "Multiplayer clan syndicate with treasury, war points, and upgrade level.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "factionId": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "leaderUid": { "type": "string" },
+        "treasuryGold": { "type": "number" },
+        "treasuryContraband": { "type": "number" },
+        "clanLevel": { "type": "number" },
+        "powerScore": { "type": "number" },
+        "warPoints": { "type": "number" },
+        "memberCount": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "factionId", "leaderUid", "treasuryGold", "treasuryContraband", "clanLevel", "powerScore", "memberCount", "createdAt"]
+    },
+    "ClanMember": {
+      "title": "ClanMember",
+      "description": "Membership record inside a clan subcollection.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "codename": { "type": "string" },
+        "factionId": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "powerScore": { "type": "number" },
+        "role": { "type": "string", "enum": ["leader", "officer", "member"] },
+        "joinedAt": { "type": "number" }
+      },
+      "required": ["uid", "codename", "factionId", "powerScore", "role", "joinedAt"]
+    },
+    "ClanMessage": {
+      "title": "ClanMessage",
+      "description": "Real-time clan chat message.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "codename": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["uid", "codename", "text", "createdAt"]
+    },
+    "ClanRaidBoss": {
+      "title": "ClanRaidBoss",
+      "description": "Weekly co-op raid boss exclusive to members of a specific clan.",
+      "type": "object",
+      "properties": {
+        "cycle": { "type": "number" },
+        "bossName": { "type": "string" },
+        "maxHp": { "type": "number" },
+        "currentHp": { "type": "number" },
+        "lastDefeatedCycle": { "type": "number" },
+        "lastFinisherName": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["cycle", "bossName", "maxHp", "currentHp", "lastDefeatedCycle", "lastFinisherName", "updatedAt"]
+    },
+    "ClanRaidDamage": {
+      "title": "ClanRaidDamage",
+      "description": "Clan member damage contribution toward the clan raid boss.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "codename": { "type": "string" },
+        "cycle": { "type": "number" },
+        "damage": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["uid", "codename", "cycle", "damage", "updatedAt"]
+    },
+    "AuctionListing": {
+      "title": "AuctionListing",
+      "description": "Player-to-player auction house listing for equipment, runes, or contraband.",
+      "type": "object",
+      "properties": {
+        "sellerUid": { "type": "string" },
+        "sellerName": { "type": "string" },
+        "itemType": { "type": "string", "enum": ["equipment", "rune", "contraband", "forge_stones"] },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "enhanceLevel": { "type": "number" },
+        "quantity": { "type": "number" },
+        "priceGold": { "type": "number" },
+        "status": { "type": "string", "enum": ["open", "sold", "cancelled"] },
+        "buyerUid": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "soldAt": { "type": "number" }
+      },
+      "required": ["sellerUid", "sellerName", "itemType", "itemId", "itemName", "quantity", "priceGold", "status", "createdAt"]
+    },
+    "TimedAuction": {
+      "title": "TimedAuction",
+      "description": "Live countdown system auction where players outbid each other in Gold for rare items.",
+      "type": "object",
+      "properties": {
+        "cycle": { "type": "number" },
+        "itemType": { "type": "string", "enum": ["rune", "blueprint_pack", "essence_crate", "crystal_pouch"] },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "quantity": { "type": "number" },
+        "currentBid": { "type": "number" },
+        "highestBidderUid": { "type": "string" },
+        "highestBidderName": { "type": "string" },
+        "endsAt": { "type": "number" },
+        "claimedByWinner": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["cycle", "itemType", "itemId", "itemName", "quantity", "currentBid", "highestBidderUid", "highestBidderName", "endsAt", "claimedByWinner", "createdAt"]
+    },
+    "Bounty": {
+      "title": "Bounty",
+      "description": "Hitlist bounty posted by players on rival operatives.",
+      "type": "object",
+      "properties": {
+        "posterUid": { "type": "string" },
+        "posterName": { "type": "string" },
+        "targetUid": { "type": "string" },
+        "targetName": { "type": "string" },
+        "targetFaction": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "rewardGold": { "type": "number" },
+        "rewardCrystals": { "type": "number" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "claimed", "cancelled"] },
+        "hunterUid": { "type": "string" },
+        "hunterName": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "claimedAt": { "type": "number" }
+      },
+      "required": ["posterUid", "posterName", "targetUid", "targetName", "targetFaction", "rewardGold", "rewardCrystals", "reason", "status", "createdAt"]
+    },
+    "SeasonHallEntry": {
+      "title": "SeasonHallEntry",
+      "description": "Recorded seasonal Hall of Fame champion entry.",
+      "type": "object",
+      "properties": {
+        "seasonNumber": { "type": "number" },
+        "championUid": { "type": "string" },
+        "championName": { "type": "string" },
+        "championFaction": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "championPower": { "type": "number" },
+        "topClanName": { "type": "string" },
+        "recordedAt": { "type": "number" }
+      },
+      "required": ["seasonNumber", "championUid", "championName", "championFaction", "championPower", "topClanName", "recordedAt"]
+    },
+    "ReferralClaim": {
+      "title": "ReferralClaim",
+      "description": "Tracks referral code redemption so each player can claim once.",
+      "type": "object",
+      "properties": {
+        "claimantUid": { "type": "string" },
+        "referrerUid": { "type": "string" },
+        "referrerCode": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["claimantUid", "referrerUid", "referrerCode", "createdAt"]
+    },
+    "TerritorySector": {
+      "title": "TerritorySector",
+      "description": "City district contested by the three secret factions.",
+      "type": "object",
+      "properties": {
+        "sectorId": { "type": "string" },
+        "name": { "type": "string" },
+        "controllingFaction": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "shadowHuntersScore": { "type": "number" },
+        "techWardensScore": { "type": "number" },
+        "bloodMagesScore": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["sectorId", "name", "controllingFaction", "shadowHuntersScore", "techWardensScore", "bloodMagesScore", "updatedAt"]
+    },
+    "PvpAlert": {
+      "title": "PvpAlert",
+      "description": "Incoming raid, auction, bounty, or referral notification.",
+      "type": "object",
+      "properties": {
+        "targetUid": { "type": "string" },
+        "attackerUid": { "type": "string" },
+        "attackerName": { "type": "string" },
+        "attackerFaction": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "attackerPower": { "type": "number" },
+        "alertType": { "type": "string", "enum": ["raid_incoming", "auction_sold", "referral_bonus", "bounty_claimed"] },
+        "summary": { "type": "string" },
+        "goldAmount": { "type": "number" },
+        "crystalAmount": { "type": "number" },
+        "resolved": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["targetUid", "attackerUid", "attackerName", "attackerFaction", "attackerPower", "alertType", "summary", "goldAmount", "resolved", "createdAt"]
+    },
+    "ServerBoss": {
+      "title": "ServerBoss",
+      "description": "Shared server-wide co-op raid boss state.",
+      "type": "object",
+      "properties": {
+        "cycle": { "type": "number" },
+        "bossIndex": { "type": "number" },
+        "bossName": { "type": "string" },
+        "maxHp": { "type": "number" },
+        "currentHp": { "type": "number" },
+        "lastDefeatedCycle": { "type": "number" },
+        "lastFinisherName": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["cycle", "bossIndex", "bossName", "maxHp", "currentHp", "lastDefeatedCycle", "lastFinisherName", "updatedAt"]
+    },
+    "ServerBossDamage": {
+      "title": "ServerBossDamage",
+      "description": "Player damage contribution on the shared server boss.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "codename": { "type": "string" },
+        "factionId": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "cycle": { "type": "number" },
+        "damage": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["uid", "codename", "factionId", "cycle", "damage", "updatedAt"]
+    },
+    "GlobalChatMessage": {
+      "title": "GlobalChatMessage",
+      "description": "City-wide global chat message with cosmetic frame & color.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "codename": { "type": "string" },
+        "factionId": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "titleTag": { "type": "string" },
+        "chatColor": { "type": "string" },
+        "nameFrame": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["uid", "codename", "factionId", "text", "createdAt"]
+    },
+    "ClanWar": {
+      "title": "ClanWar",
+      "description": "Formal 24-hour clan vs clan war scoreboard.",
+      "type": "object",
+      "properties": {
+        "challengerClanId": { "type": "string" },
+        "challengerClanName": { "type": "string" },
+        "challengerFaction": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "defenderClanId": { "type": "string" },
+        "defenderClanName": { "type": "string" },
+        "defenderFaction": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "challengerScore": { "type": "number" },
+        "defenderScore": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "finished"] },
+        "winnerClanId": { "type": "string" },
+        "endsAt": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": [
+        "challengerClanId",
+        "challengerClanName",
+        "challengerFaction",
+        "defenderClanId",
+        "defenderClanName",
+        "defenderFaction",
+        "challengerScore",
+        "defenderScore",
+        "status",
+        "winnerClanId",
+        "endsAt",
+        "createdAt"
+      ]
+    },
+    "LivePvpDuel": {
+      "title": "LivePvpDuel",
+      "description": "Real-time turn-based 1v1 PvP Arena duel room synced between two operatives.",
+      "type": "object",
+      "properties": {
+        "challengerUid": { "type": "string" },
+        "challengerName": { "type": "string" },
+        "challengerFaction": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "challengerPower": { "type": "number" },
+        "challengerHp": { "type": "number" },
+        "challengerMaxHp": { "type": "number" },
+        "challengerAction": { "type": "string", "enum": ["", "strike", "guard", "counter", "ultimate"] },
+        "opponentUid": { "type": "string" },
+        "opponentName": { "type": "string" },
+        "opponentFaction": { "type": "string", "enum": ["shadow_hunters", "tech_wardens", "blood_mages"] },
+        "opponentPower": { "type": "number" },
+        "opponentHp": { "type": "number" },
+        "opponentMaxHp": { "type": "number" },
+        "opponentAction": { "type": "string", "enum": ["", "strike", "guard", "counter", "ultimate"] },
+        "turn": { "type": "number" },
+        "stakeGold": { "type": "number" },
+        "status": { "type": "string", "enum": ["open", "active", "finished"] },
+        "winnerUid": { "type": "string" },
+        "lastSummary": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": [
+        "challengerUid",
+        "challengerName",
+        "challengerFaction",
+        "challengerPower",
+        "challengerHp",
+        "challengerMaxHp",
+        "challengerAction",
+        "opponentUid",
+        "opponentName",
+        "opponentFaction",
+        "opponentPower",
+        "opponentHp",
+        "opponentMaxHp",
+        "opponentAction",
+        "turn",
+        "stakeGold",
+        "status",
+        "winnerUid",
+        "lastSummary",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CoopHeist": {
+      "title": "CoopHeist",
+      "description": "Multiplayer 2-to-4 player co-op vault heist room with shared security guardian waves.",
+      "type": "object",
+      "properties": {
+        "hostUid": { "type": "string" },
+        "hostName": { "type": "string" },
+        "templateId": { "type": "string" },
+        "title": { "type": "string" },
+        "difficulty": { "type": "string" },
+        "bossName": { "type": "string" },
+        "maxPlayers": { "type": "number" },
+        "bossMaxHp": { "type": "number" },
+        "bossCurrentHp": { "type": "number" },
+        "phase": { "type": "number" },
+        "status": { "type": "string", "enum": ["recruiting", "active", "completed"] },
+        "memberUids": { "type": "array" },
+        "memberSummaries": { "type": "array" },
+        "lastActionText": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": [
+        "hostUid",
+        "hostName",
+        "templateId",
+        "title",
+        "difficulty",
+        "bossName",
+        "maxPlayers",
+        "bossMaxHp",
+        "bossCurrentHp",
+        "phase",
+        "status",
+        "memberUids",
+        "memberSummaries",
+        "lastActionText",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user PII document"
+    },
+    "/operatives/{userId}": {
+      "schema": { "$ref": "#/entities/OperativeSave" },
+      "description": "Owner-only full RPG save state"
+    },
+    "/public_operatives/{userId}": {
+      "schema": { "$ref": "#/entities/PublicOperative" },
+      "description": "Public non-PII operative stats for leaderboard and PvP raids"
+    },
+    "/clans/{clanId}": {
+      "schema": { "$ref": "#/entities/Clan" },
+      "description": "Online clan syndicate"
+    },
+    "/clans/{clanId}/members/{memberUid}": {
+      "schema": { "$ref": "#/entities/ClanMember" },
+      "description": "Members of a clan"
+    },
+    "/clans/{clanId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ClanMessage" },
+      "description": "Real-time chat inside a clan"
+    },
+    "/clans/{clanId}/raid_boss/{bossDocId}": {
+      "schema": { "$ref": "#/entities/ClanRaidBoss" },
+      "description": "Clan-exclusive weekly co-op raid boss"
+    },
+    "/clans/{clanId}/raid_damage/{userId}": {
+      "schema": { "$ref": "#/entities/ClanRaidDamage" },
+      "description": "Member damage contributions on clan raid boss"
+    },
+    "/auction_listings/{listingId}": {
+      "schema": { "$ref": "#/entities/AuctionListing" },
+      "description": "Online player auction house listings"
+    },
+    "/timed_auctions/{auctionId}": {
+      "schema": { "$ref": "#/entities/TimedAuction" },
+      "description": "Live timed system auction with countdown bidding"
+    },
+    "/bounties/{bountyId}": {
+      "schema": { "$ref": "#/entities/Bounty" },
+      "description": "Player-posted bounties on rival operatives"
+    },
+    "/season_hall/{seasonKey}": {
+      "schema": { "$ref": "#/entities/SeasonHallEntry" },
+      "description": "Seasonal Hall of Fame records"
+    },
+    "/referrals/{userId}": {
+      "schema": { "$ref": "#/entities/ReferralClaim" },
+      "description": "Referral redemption records"
+    },
+    "/territory_sectors/{sectorId}": {
+      "schema": { "$ref": "#/entities/TerritorySector" },
+      "description": "Six contested city districts for Territory Wars"
+    },
+    "/pvp_alerts/{alertId}": {
+      "schema": { "$ref": "#/entities/PvpAlert" },
+      "description": "PvP incoming raid, auction, bounty, and referral notifications"
+    },
+    "/server_boss/{bossDocId}": {
+      "schema": { "$ref": "#/entities/ServerBoss" },
+      "description": "Co-op server-wide world boss state"
+    },
+    "/server_boss_damage/{userId}": {
+      "schema": { "$ref": "#/entities/ServerBossDamage" },
+      "description": "Live server boss damage leaderboard"
+    },
+    "/global_chat/{messageId}": {
+      "schema": { "$ref": "#/entities/GlobalChatMessage" },
+      "description": "Global city chat channel"
+    },
+    "/clan_wars/{warId}": {
+      "schema": { "$ref": "#/entities/ClanWar" },
+      "description": "Formal 24-hour clan vs clan wars"
+    },
+    "/live_duels/{duelId}": {
+      "schema": { "$ref": "#/entities/LivePvpDuel" },
+      "description": "Live real-time 1v1 PvP duel rooms"
+    },
+    "/coop_heists/{heistId}": {
+      "schema": { "$ref": "#/entities/CoopHeist" },
+      "description": "Multiplayer 2-4 player co-op vault heist rooms"
+    }
+  }
+}

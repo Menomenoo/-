@@ -1,0 +1,857 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions (Zero-Trust Eight Pillars)
+    // ===============================================================
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAuthenticated() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        (request.auth.token.email == 'ilove201025@yahoo.com' && request.auth.token.email_verified == true)
+      );
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidFaction(f) {
+      return f in ['shadow_hunters', 'tech_wardens', 'blood_mages'];
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidNumber(val, minVal, maxVal) {
+      return val is number && val >= minVal && val <= maxVal;
+    }
+
+    function isClanMember(clanId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/clans/$(clanId)/members/$(request.auth.uid));
+    }
+
+    function isClanLeader(clanId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/clans/$(clanId)) &&
+        get(/databases/$(database)/documents/clans/$(clanId)).data.leaderUid == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Validators
+    // ===============================================================
+    function isValidUserProfile(data) {
+      return hasRequiredFields(['uid', 'role', 'createdAt']) &&
+        hasOnlyAllowedFields(['uid', 'email', 'displayName', 'role', 'createdAt']) &&
+        data.uid == request.auth.uid &&
+        data.role in ['player', 'admin'] &&
+        data.createdAt is number &&
+        (!('email' in data) || isValidString(data.email, 3, 120)) &&
+        (!('displayName' in data) || isValidString(data.displayName, 1, 80));
+    }
+
+    function isValidOperativeSave(data) {
+      return hasRequiredFields(['uid', 'codename', 'factionId', 'level', 'saveJson', 'updatedAt']) &&
+        hasOnlyAllowedFields(['uid', 'codename', 'factionId', 'level', 'prestigeRank', 'saveJson', 'updatedAt']) &&
+        data.uid == request.auth.uid &&
+        isValidString(data.codename, 1, 32) &&
+        isValidFaction(data.factionId) &&
+        isValidNumber(data.level, 1, 9999) &&
+        (!('prestigeRank' in data) || isValidNumber(data.prestigeRank, 0, 999)) &&
+        isValidString(data.saveJson, 10, 450000) &&
+        data.updatedAt is number;
+    }
+
+    function isValidPublicOperative(data) {
+      return hasRequiredFields(['uid', 'codename', 'factionId', 'level', 'prestigeRank', 'powerScore', 'arenaRating', 'defenseScore', 'vaultGold', 'updatedAt']) &&
+        hasOnlyAllowedFields([
+          'uid', 'codename', 'factionId', 'subSpecId', 'level', 'prestigeRank', 'powerScore',
+          'arenaRating', 'defenseScore', 'vaultGold', 'clanId', 'clanName', 'referralCode',
+          'nameFrame', 'seasonMedals', 'equippedWeaponId', 'equippedArmorId', 'equippedRelicId',
+          'activeCompanionId', 'attackStat', 'defenseStat', 'agilityStat', 'masteryStat',
+          'influenceStat', 'updatedAt'
+        ]) &&
+        data.uid == request.auth.uid &&
+        isValidString(data.codename, 1, 32) &&
+        isValidFaction(data.factionId) &&
+        (!('subSpecId' in data) || isValidString(data.subSpecId, 0, 40)) &&
+        isValidNumber(data.level, 1, 9999) &&
+        isValidNumber(data.prestigeRank, 0, 999) &&
+        isValidNumber(data.powerScore, 0, 100000000) &&
+        isValidNumber(data.arenaRating, 0, 1000000) &&
+        isValidNumber(data.defenseScore, 0, 100000000) &&
+        isValidNumber(data.vaultGold, 0, 1000000000) &&
+        (!('clanId' in data) || isValidString(data.clanId, 0, 64)) &&
+        (!('clanName' in data) || isValidString(data.clanName, 0, 40)) &&
+        (!('referralCode' in data) || isValidString(data.referralCode, 4, 20)) &&
+        (!('nameFrame' in data) || isValidString(data.nameFrame, 0, 40)) &&
+        (!('seasonMedals' in data) || isValidNumber(data.seasonMedals, 0, 999)) &&
+        (!('equippedWeaponId' in data) || isValidString(data.equippedWeaponId, 0, 80)) &&
+        (!('equippedArmorId' in data) || isValidString(data.equippedArmorId, 0, 80)) &&
+        (!('equippedRelicId' in data) || isValidString(data.equippedRelicId, 0, 80)) &&
+        (!('activeCompanionId' in data) || isValidString(data.activeCompanionId, 0, 40)) &&
+        (!('attackStat' in data) || isValidNumber(data.attackStat, 0, 10000000)) &&
+        (!('defenseStat' in data) || isValidNumber(data.defenseStat, 0, 10000000)) &&
+        (!('agilityStat' in data) || isValidNumber(data.agilityStat, 0, 10000000)) &&
+        (!('masteryStat' in data) || isValidNumber(data.masteryStat, 0, 10000000)) &&
+        (!('influenceStat' in data) || isValidNumber(data.influenceStat, 0, 10000000)) &&
+        data.updatedAt is number;
+    }
+
+    function isValidClanCreate(data) {
+      return hasRequiredFields(['name', 'factionId', 'leaderUid', 'treasuryGold', 'treasuryContraband', 'clanLevel', 'powerScore', 'memberCount', 'createdAt']) &&
+        hasOnlyAllowedFields(['name', 'factionId', 'leaderUid', 'treasuryGold', 'treasuryContraband', 'clanLevel', 'powerScore', 'warPoints', 'memberCount', 'createdAt']) &&
+        isValidString(data.name, 2, 32) &&
+        isValidFaction(data.factionId) &&
+        data.leaderUid == request.auth.uid &&
+        isValidNumber(data.treasuryGold, 0, 1000000000) &&
+        isValidNumber(data.treasuryContraband, 0, 100000000) &&
+        data.clanLevel == 1 &&
+        isValidNumber(data.powerScore, 0, 1000000000) &&
+        (!('warPoints' in data) || isValidNumber(data.warPoints, 0, 1000000000)) &&
+        data.memberCount == 1 &&
+        data.createdAt is number;
+    }
+
+    function isValidClanUpdate(newData, oldData) {
+      return hasOnlyAllowedFields(['name', 'factionId', 'leaderUid', 'treasuryGold', 'treasuryContraband', 'clanLevel', 'powerScore', 'warPoints', 'memberCount', 'createdAt']) &&
+        newData.leaderUid == oldData.leaderUid &&
+        newData.factionId == oldData.factionId &&
+        newData.createdAt == oldData.createdAt &&
+        isValidString(newData.name, 2, 32) &&
+        isValidNumber(newData.treasuryGold, 0, 1000000000) &&
+        isValidNumber(newData.treasuryContraband, 0, 100000000) &&
+        isValidNumber(newData.clanLevel, oldData.clanLevel, oldData.clanLevel + 1) &&
+        isValidNumber(newData.powerScore, 0, 1000000000) &&
+        (!('warPoints' in newData) || isValidNumber(newData.warPoints, 0, 1000000000)) &&
+        isValidNumber(newData.memberCount, 0, 200);
+    }
+
+    function isValidClanMember(data, memberUid) {
+      return hasRequiredFields(['uid', 'codename', 'factionId', 'powerScore', 'role', 'joinedAt']) &&
+        hasOnlyAllowedFields(['uid', 'codename', 'factionId', 'powerScore', 'role', 'joinedAt']) &&
+        data.uid == memberUid &&
+        isValidString(data.codename, 1, 32) &&
+        isValidFaction(data.factionId) &&
+        isValidNumber(data.powerScore, 0, 100000000) &&
+        data.role in ['leader', 'officer', 'member'] &&
+        data.joinedAt is number;
+    }
+
+    function isValidClanMessage(data) {
+      return hasRequiredFields(['uid', 'codename', 'text', 'createdAt']) &&
+        hasOnlyAllowedFields(['uid', 'codename', 'text', 'createdAt']) &&
+        data.uid == request.auth.uid &&
+        isValidString(data.codename, 1, 32) &&
+        isValidString(data.text, 1, 400) &&
+        data.createdAt is number;
+    }
+
+    function isValidAuctionCreate(data) {
+      return hasRequiredFields(['sellerUid', 'sellerName', 'itemType', 'itemId', 'itemName', 'quantity', 'priceGold', 'status', 'createdAt']) &&
+        hasOnlyAllowedFields(['sellerUid', 'sellerName', 'itemType', 'itemId', 'itemName', 'enhanceLevel', 'quantity', 'priceGold', 'status', 'buyerUid', 'createdAt', 'soldAt']) &&
+        data.sellerUid == request.auth.uid &&
+        isValidString(data.sellerName, 1, 32) &&
+        data.itemType in ['equipment', 'rune', 'contraband', 'forge_stones'] &&
+        isValidString(data.itemId, 1, 64) &&
+        isValidString(data.itemName, 1, 64) &&
+        (!('enhanceLevel' in data) || isValidNumber(data.enhanceLevel, 0, 15)) &&
+        isValidNumber(data.quantity, 1, 1000) &&
+        isValidNumber(data.priceGold, 10, 50000000) &&
+        data.status == 'open' &&
+        data.createdAt is number;
+    }
+
+    function isValidAuctionUpdate(newData, oldData) {
+      return oldData.status == 'open' &&
+        hasOnlyAllowedFields(['sellerUid', 'sellerName', 'itemType', 'itemId', 'itemName', 'enhanceLevel', 'quantity', 'priceGold', 'status', 'buyerUid', 'createdAt', 'soldAt']) &&
+        newData.sellerUid == oldData.sellerUid &&
+        newData.sellerName == oldData.sellerName &&
+        newData.itemType == oldData.itemType &&
+        newData.itemId == oldData.itemId &&
+        newData.itemName == oldData.itemName &&
+        (!('enhanceLevel' in oldData) || newData.enhanceLevel == oldData.enhanceLevel) &&
+        newData.quantity == oldData.quantity &&
+        newData.priceGold == oldData.priceGold &&
+        newData.createdAt == oldData.createdAt &&
+        (
+          (newData.status == 'cancelled' && oldData.sellerUid == request.auth.uid) ||
+          (newData.status == 'sold' && newData.buyerUid == request.auth.uid && newData.soldAt is number)
+        );
+    }
+
+    function isValidSectorWrite(newData, oldData) {
+      return hasRequiredFields(['sectorId', 'name', 'controllingFaction', 'shadowHuntersScore', 'techWardensScore', 'bloodMagesScore', 'updatedAt']) &&
+        hasOnlyAllowedFields(['sectorId', 'name', 'controllingFaction', 'shadowHuntersScore', 'techWardensScore', 'bloodMagesScore', 'updatedAt']) &&
+        isValidString(newData.sectorId, 2, 40) &&
+        isValidString(newData.name, 2, 60) &&
+        isValidFaction(newData.controllingFaction) &&
+        isValidNumber(newData.shadowHuntersScore, 0, 1000000000) &&
+        isValidNumber(newData.techWardensScore, 0, 1000000000) &&
+        isValidNumber(newData.bloodMagesScore, 0, 1000000000) &&
+        newData.updatedAt is number &&
+        (oldData == null || (
+          newData.sectorId == oldData.sectorId &&
+          newData.name == oldData.name &&
+          newData.shadowHuntersScore >= oldData.shadowHuntersScore &&
+          newData.techWardensScore >= oldData.techWardensScore &&
+          newData.bloodMagesScore >= oldData.bloodMagesScore &&
+          (newData.shadowHuntersScore - oldData.shadowHuntersScore) <= 500 &&
+          (newData.techWardensScore - oldData.techWardensScore) <= 500 &&
+          (newData.bloodMagesScore - oldData.bloodMagesScore) <= 500
+        ));
+    }
+
+    function isValidPvpAlertCreate(data) {
+      return hasRequiredFields(['targetUid', 'attackerUid', 'attackerName', 'attackerFaction', 'attackerPower', 'alertType', 'summary', 'goldAmount', 'resolved', 'createdAt']) &&
+        hasOnlyAllowedFields(['targetUid', 'attackerUid', 'attackerName', 'attackerFaction', 'attackerPower', 'alertType', 'summary', 'goldAmount', 'crystalAmount', 'resolved', 'createdAt']) &&
+        isValidString(data.targetUid, 1, 64) &&
+        data.attackerUid == request.auth.uid &&
+        isValidString(data.attackerName, 1, 32) &&
+        isValidFaction(data.attackerFaction) &&
+        isValidNumber(data.attackerPower, 0, 100000000) &&
+        data.alertType in ['raid_incoming', 'auction_sold', 'referral_bonus', 'bounty_claimed'] &&
+        isValidString(data.summary, 1, 160) &&
+        isValidNumber(data.goldAmount, 0, 50000000) &&
+        (!('crystalAmount' in data) || isValidNumber(data.crystalAmount, 0, 500)) &&
+        data.resolved == false &&
+        data.createdAt is number;
+    }
+
+    function isValidPvpAlertResolve(newData, oldData) {
+      return oldData.resolved == false &&
+        hasOnlyAllowedFields(['targetUid', 'attackerUid', 'attackerName', 'attackerFaction', 'attackerPower', 'alertType', 'summary', 'goldAmount', 'crystalAmount', 'resolved', 'createdAt']) &&
+        newData.targetUid == oldData.targetUid &&
+        newData.attackerUid == oldData.attackerUid &&
+        newData.attackerName == oldData.attackerName &&
+        newData.attackerFaction == oldData.attackerFaction &&
+        newData.attackerPower == oldData.attackerPower &&
+        newData.alertType == oldData.alertType &&
+        newData.summary == oldData.summary &&
+        newData.goldAmount == oldData.goldAmount &&
+        (!('crystalAmount' in oldData) || newData.crystalAmount == oldData.crystalAmount) &&
+        newData.createdAt == oldData.createdAt &&
+        newData.resolved == true;
+    }
+
+    function isValidServerBoss(data) {
+      return hasRequiredFields(['cycle', 'bossIndex', 'bossName', 'maxHp', 'currentHp', 'lastDefeatedCycle', 'lastFinisherName', 'updatedAt']) &&
+        hasOnlyAllowedFields(['cycle', 'bossIndex', 'bossName', 'maxHp', 'currentHp', 'lastDefeatedCycle', 'lastFinisherName', 'updatedAt']) &&
+        isValidNumber(data.cycle, 1, 999999) &&
+        isValidNumber(data.bossIndex, 0, 100) &&
+        isValidString(data.bossName, 2, 64) &&
+        isValidNumber(data.maxHp, 1000, 500000000) &&
+        isValidNumber(data.currentHp, 0, 500000000) &&
+        isValidNumber(data.lastDefeatedCycle, 0, 999999) &&
+        isValidString(data.lastFinisherName, 0, 32) &&
+        data.updatedAt is number;
+    }
+
+    function isValidServerBossDamage(data, targetUid) {
+      return hasRequiredFields(['uid', 'codename', 'factionId', 'cycle', 'damage', 'updatedAt']) &&
+        hasOnlyAllowedFields(['uid', 'codename', 'factionId', 'cycle', 'damage', 'updatedAt']) &&
+        data.uid == targetUid &&
+        isValidString(data.codename, 1, 32) &&
+        isValidFaction(data.factionId) &&
+        isValidNumber(data.cycle, 1, 999999) &&
+        isValidNumber(data.damage, 0, 500000000) &&
+        data.updatedAt is number;
+    }
+
+    function isValidGlobalChatMessage(data) {
+      return hasRequiredFields(['uid', 'codename', 'factionId', 'text', 'createdAt']) &&
+        hasOnlyAllowedFields(['uid', 'codename', 'factionId', 'titleTag', 'chatColor', 'nameFrame', 'text', 'createdAt']) &&
+        data.uid == request.auth.uid &&
+        isValidString(data.codename, 1, 32) &&
+        isValidFaction(data.factionId) &&
+        (!('titleTag' in data) || isValidString(data.titleTag, 0, 32)) &&
+        (!('chatColor' in data) || isValidString(data.chatColor, 0, 40)) &&
+        (!('nameFrame' in data) || isValidString(data.nameFrame, 0, 40)) &&
+        isValidString(data.text, 1, 300) &&
+        data.createdAt is number;
+    }
+
+    function isValidClanRaidBoss(data) {
+      return hasRequiredFields(['cycle', 'bossName', 'maxHp', 'currentHp', 'lastDefeatedCycle', 'lastFinisherName', 'updatedAt']) &&
+        hasOnlyAllowedFields(['cycle', 'bossName', 'maxHp', 'currentHp', 'lastDefeatedCycle', 'lastFinisherName', 'updatedAt']) &&
+        isValidNumber(data.cycle, 1, 999999) &&
+        isValidString(data.bossName, 2, 64) &&
+        isValidNumber(data.maxHp, 1000, 500000000) &&
+        isValidNumber(data.currentHp, 0, 500000000) &&
+        isValidNumber(data.lastDefeatedCycle, 0, 999999) &&
+        isValidString(data.lastFinisherName, 0, 32) &&
+        data.updatedAt is number;
+    }
+
+    function isValidClanRaidDamage(data, targetUid) {
+      return hasRequiredFields(['uid', 'codename', 'cycle', 'damage', 'updatedAt']) &&
+        hasOnlyAllowedFields(['uid', 'codename', 'cycle', 'damage', 'updatedAt']) &&
+        data.uid == targetUid &&
+        isValidString(data.codename, 1, 32) &&
+        isValidNumber(data.cycle, 1, 999999) &&
+        isValidNumber(data.damage, 0, 500000000) &&
+        data.updatedAt is number;
+    }
+
+    function isValidBountyCreate(data) {
+      return hasRequiredFields(['posterUid', 'posterName', 'targetUid', 'targetName', 'targetFaction', 'rewardGold', 'rewardCrystals', 'reason', 'status', 'createdAt']) &&
+        hasOnlyAllowedFields(['posterUid', 'posterName', 'targetUid', 'targetName', 'targetFaction', 'rewardGold', 'rewardCrystals', 'reason', 'status', 'hunterUid', 'hunterName', 'createdAt', 'claimedAt']) &&
+        data.posterUid == request.auth.uid &&
+        data.targetUid != request.auth.uid &&
+        isValidString(data.posterName, 1, 32) &&
+        isValidString(data.targetUid, 1, 64) &&
+        isValidString(data.targetName, 1, 32) &&
+        isValidFaction(data.targetFaction) &&
+        isValidNumber(data.rewardGold, 200, 10000000) &&
+        isValidNumber(data.rewardCrystals, 0, 200) &&
+        isValidString(data.reason, 1, 100) &&
+        data.status == 'open' &&
+        data.createdAt is number;
+    }
+
+    function isValidBountyUpdate(newData, oldData) {
+      return oldData.status == 'open' &&
+        hasOnlyAllowedFields(['posterUid', 'posterName', 'targetUid', 'targetName', 'targetFaction', 'rewardGold', 'rewardCrystals', 'reason', 'status', 'hunterUid', 'hunterName', 'createdAt', 'claimedAt']) &&
+        newData.posterUid == oldData.posterUid &&
+        newData.targetUid == oldData.targetUid &&
+        newData.rewardGold == oldData.rewardGold &&
+        newData.rewardCrystals == oldData.rewardCrystals &&
+        newData.createdAt == oldData.createdAt &&
+        (
+          (newData.status == 'cancelled' && oldData.posterUid == request.auth.uid) ||
+          (newData.status == 'claimed' && newData.hunterUid == request.auth.uid && isValidString(newData.hunterName, 1, 32) && newData.claimedAt is number)
+        );
+    }
+
+    function isValidTimedAuctionCreate(data) {
+      return hasRequiredFields(['cycle', 'itemType', 'itemId', 'itemName', 'quantity', 'currentBid', 'highestBidderUid', 'highestBidderName', 'endsAt', 'claimedByWinner', 'createdAt']) &&
+        hasOnlyAllowedFields(['cycle', 'itemType', 'itemId', 'itemName', 'quantity', 'currentBid', 'highestBidderUid', 'highestBidderName', 'endsAt', 'claimedByWinner', 'createdAt']) &&
+        isValidNumber(data.cycle, 1, 999999) &&
+        data.itemType in ['rune', 'blueprint_pack', 'essence_crate', 'crystal_pouch'] &&
+        isValidString(data.itemId, 1, 40) &&
+        isValidString(data.itemName, 2, 64) &&
+        isValidNumber(data.quantity, 1, 200) &&
+        isValidNumber(data.currentBid, 100, 100000000) &&
+        isValidString(data.highestBidderUid, 0, 64) &&
+        isValidString(data.highestBidderName, 0, 32) &&
+        data.endsAt is number &&
+        data.claimedByWinner == false &&
+        data.createdAt is number;
+    }
+
+    function isValidTimedAuctionUpdate(newData, oldData) {
+      return hasOnlyAllowedFields(['cycle', 'itemType', 'itemId', 'itemName', 'quantity', 'currentBid', 'highestBidderUid', 'highestBidderName', 'endsAt', 'claimedByWinner', 'createdAt']) &&
+        (
+          (
+            oldData.claimedByWinner == false &&
+            newData.cycle == oldData.cycle &&
+            newData.itemType == oldData.itemType &&
+            newData.itemId == oldData.itemId &&
+            newData.itemName == oldData.itemName &&
+            newData.quantity == oldData.quantity &&
+            newData.currentBid > oldData.currentBid &&
+            newData.currentBid <= oldData.currentBid + 5000000 &&
+            newData.highestBidderUid == request.auth.uid &&
+            isValidString(newData.highestBidderName, 1, 32) &&
+            newData.claimedByWinner == false
+          ) ||
+          (
+            oldData.claimedByWinner == false &&
+            oldData.highestBidderUid == request.auth.uid &&
+            newData.claimedByWinner == true &&
+            newData.cycle == oldData.cycle
+          ) ||
+          (
+            newData.cycle == oldData.cycle + 1 &&
+            isValidTimedAuctionCreate(newData)
+          )
+        );
+    }
+
+    function isValidSeasonHallEntry(data) {
+      return hasRequiredFields(['seasonNumber', 'championUid', 'championName', 'championFaction', 'championPower', 'topClanName', 'recordedAt']) &&
+        hasOnlyAllowedFields(['seasonNumber', 'championUid', 'championName', 'championFaction', 'championPower', 'topClanName', 'recordedAt']) &&
+        isValidNumber(data.seasonNumber, 1, 99999) &&
+        isValidString(data.championUid, 1, 64) &&
+        isValidString(data.championName, 1, 32) &&
+        isValidFaction(data.championFaction) &&
+        isValidNumber(data.championPower, 0, 1000000000) &&
+        isValidString(data.topClanName, 0, 40) &&
+        data.recordedAt is number;
+    }
+
+    function isValidReferralClaim(data, userId) {
+      return hasRequiredFields(['claimantUid', 'referrerUid', 'referrerCode', 'createdAt']) &&
+        hasOnlyAllowedFields(['claimantUid', 'referrerUid', 'referrerCode', 'createdAt']) &&
+        data.claimantUid == userId &&
+        data.referrerUid != userId &&
+        isValidString(data.referrerUid, 1, 64) &&
+        isValidString(data.referrerCode, 4, 20) &&
+        data.createdAt is number;
+    }
+
+    function isValidClanWarCreate(data) {
+      return hasRequiredFields(['challengerClanId', 'challengerClanName', 'challengerFaction', 'defenderClanId', 'defenderClanName', 'defenderFaction', 'challengerScore', 'defenderScore', 'status', 'winnerClanId', 'endsAt', 'createdAt']) &&
+        hasOnlyAllowedFields(['challengerClanId', 'challengerClanName', 'challengerFaction', 'defenderClanId', 'defenderClanName', 'defenderFaction', 'challengerScore', 'defenderScore', 'status', 'winnerClanId', 'endsAt', 'createdAt']) &&
+        isValidString(data.challengerClanId, 1, 64) &&
+        isValidString(data.defenderClanId, 1, 64) &&
+        data.challengerClanId != data.defenderClanId &&
+        isValidString(data.challengerClanName, 2, 32) &&
+        isValidString(data.defenderClanName, 2, 32) &&
+        isValidFaction(data.challengerFaction) &&
+        isValidFaction(data.defenderFaction) &&
+        data.challengerScore == 0 &&
+        data.defenderScore == 0 &&
+        data.status == 'active' &&
+        data.winnerClanId == '' &&
+        data.createdAt is number &&
+        data.endsAt is number &&
+        data.endsAt > data.createdAt;
+    }
+
+    function isValidClanWarUpdate(newData, oldData) {
+      return oldData.status == 'active' &&
+        hasOnlyAllowedFields(['challengerClanId', 'challengerClanName', 'challengerFaction', 'defenderClanId', 'defenderClanName', 'defenderFaction', 'challengerScore', 'defenderScore', 'status', 'winnerClanId', 'endsAt', 'createdAt']) &&
+        newData.challengerClanId == oldData.challengerClanId &&
+        newData.challengerClanName == oldData.challengerClanName &&
+        newData.challengerFaction == oldData.challengerFaction &&
+        newData.defenderClanId == oldData.defenderClanId &&
+        newData.defenderClanName == oldData.defenderClanName &&
+        newData.defenderFaction == oldData.defenderFaction &&
+        newData.createdAt == oldData.createdAt &&
+        newData.endsAt == oldData.endsAt &&
+        (
+          (
+            newData.status == 'active' &&
+            newData.winnerClanId == '' &&
+            isValidNumber(newData.challengerScore, oldData.challengerScore, oldData.challengerScore + 500) &&
+            isValidNumber(newData.defenderScore, oldData.defenderScore, oldData.defenderScore + 500)
+          ) ||
+          (
+            newData.status == 'finished' &&
+            newData.challengerScore == oldData.challengerScore &&
+            newData.defenderScore == oldData.defenderScore &&
+            newData.winnerClanId in [oldData.challengerClanId, oldData.defenderClanId, 'draw']
+          )
+        );
+    }
+
+    function isValidLiveDuel(data) {
+      return hasRequiredFields([
+          'challengerUid', 'challengerName', 'challengerFaction', 'challengerPower',
+          'challengerHp', 'challengerMaxHp', 'challengerAction',
+          'opponentUid', 'opponentName', 'opponentFaction', 'opponentPower',
+          'opponentHp', 'opponentMaxHp', 'opponentAction',
+          'turn', 'stakeGold', 'status', 'winnerUid', 'lastSummary', 'createdAt', 'updatedAt'
+        ]) &&
+        hasOnlyAllowedFields([
+          'challengerUid', 'challengerName', 'challengerFaction', 'challengerPower',
+          'challengerHp', 'challengerMaxHp', 'challengerAction',
+          'opponentUid', 'opponentName', 'opponentFaction', 'opponentPower',
+          'opponentHp', 'opponentMaxHp', 'opponentAction',
+          'turn', 'stakeGold', 'status', 'winnerUid', 'lastSummary', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidString(data.challengerUid, 1, 64) &&
+        isValidString(data.challengerName, 1, 32) &&
+        isValidFaction(data.challengerFaction) &&
+        isValidNumber(data.challengerPower, 0, 100000000) &&
+        isValidNumber(data.challengerMaxHp, 50, 100000) &&
+        isValidNumber(data.challengerHp, 0, data.challengerMaxHp) &&
+        data.challengerAction in ['', 'strike', 'guard', 'counter', 'ultimate'] &&
+        isValidString(data.opponentUid, 0, 64) &&
+        isValidString(data.opponentName, 0, 32) &&
+        isValidFaction(data.opponentFaction) &&
+        isValidNumber(data.opponentPower, 0, 100000000) &&
+        isValidNumber(data.opponentMaxHp, 50, 100000) &&
+        isValidNumber(data.opponentHp, 0, data.opponentMaxHp) &&
+        data.opponentAction in ['', 'strike', 'guard', 'counter', 'ultimate'] &&
+        isValidNumber(data.turn, 1, 500) &&
+        isValidNumber(data.stakeGold, 0, 500000) &&
+        data.status in ['open', 'active', 'finished'] &&
+        isValidString(data.winnerUid, 0, 64) &&
+        isValidString(data.lastSummary, 0, 220) &&
+        data.createdAt is number &&
+        data.updatedAt is number;
+    }
+
+    function isValidLiveDuelUpdate(newData, oldData) {
+      return oldData.status != 'finished' &&
+        newData.challengerUid == oldData.challengerUid &&
+        newData.challengerName == oldData.challengerName &&
+        newData.challengerFaction == oldData.challengerFaction &&
+        newData.challengerPower == oldData.challengerPower &&
+        newData.challengerMaxHp == oldData.challengerMaxHp &&
+        newData.stakeGold == oldData.stakeGold &&
+        newData.createdAt == oldData.createdAt &&
+        (
+          // Action 1: Challenger cancels open duel
+          (
+            oldData.status == 'open' &&
+            oldData.challengerUid == request.auth.uid &&
+            newData.status == 'finished' &&
+            newData.winnerUid == '' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'lastSummary', 'updatedAt'])
+          ) ||
+          // Action 2: Rival joins open duel
+          (
+            oldData.status == 'open' &&
+            request.auth.uid != oldData.challengerUid &&
+            (oldData.opponentUid == '' || oldData.opponentUid == request.auth.uid) &&
+            newData.opponentUid == request.auth.uid &&
+            isValidString(newData.opponentName, 1, 32) &&
+            newData.status == 'active' &&
+            newData.turn == 1 &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'opponentUid', 'opponentName', 'opponentFaction', 'opponentPower',
+              'opponentHp', 'opponentMaxHp', 'status', 'lastSummary', 'updatedAt'
+            ])
+          ) ||
+          // Action 3: Active participant submits move or finishes match
+          (
+            oldData.status == 'active' &&
+            (request.auth.uid == oldData.challengerUid || request.auth.uid == oldData.opponentUid) &&
+            newData.opponentUid == oldData.opponentUid &&
+            newData.opponentName == oldData.opponentName &&
+            newData.opponentFaction == oldData.opponentFaction &&
+            newData.opponentPower == oldData.opponentPower &&
+            newData.opponentMaxHp == oldData.opponentMaxHp &&
+            newData.turn >= oldData.turn &&
+            newData.turn <= oldData.turn + 1 &&
+            (
+              (newData.status == 'active' && newData.winnerUid == '') ||
+              (newData.status == 'finished' && newData.winnerUid in [oldData.challengerUid, oldData.opponentUid])
+            ) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'challengerHp', 'challengerAction', 'opponentHp', 'opponentAction',
+              'turn', 'status', 'winnerUid', 'lastSummary', 'updatedAt'
+            ])
+          )
+        );
+    }
+
+    function isValidCoopHeist(data) {
+      return hasRequiredFields([
+          'hostUid', 'hostName', 'templateId', 'title', 'difficulty', 'bossName',
+          'maxPlayers', 'bossMaxHp', 'bossCurrentHp', 'phase', 'status',
+          'memberUids', 'memberSummaries', 'lastActionText', 'createdAt', 'updatedAt'
+        ]) &&
+        hasOnlyAllowedFields([
+          'hostUid', 'hostName', 'templateId', 'title', 'difficulty', 'bossName',
+          'maxPlayers', 'bossMaxHp', 'bossCurrentHp', 'phase', 'status',
+          'memberUids', 'memberSummaries', 'lastActionText', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidString(data.hostUid, 1, 64) &&
+        isValidString(data.hostName, 1, 32) &&
+        isValidString(data.templateId, 1, 40) &&
+        isValidString(data.title, 2, 64) &&
+        isValidString(data.difficulty, 2, 24) &&
+        isValidString(data.bossName, 2, 64) &&
+        data.maxPlayers == 4 &&
+        isValidNumber(data.bossMaxHp, 1000, 50000000) &&
+        isValidNumber(data.bossCurrentHp, 0, data.bossMaxHp) &&
+        isValidNumber(data.phase, 1, 3) &&
+        data.status in ['recruiting', 'active', 'completed'] &&
+        data.memberUids is list &&
+        data.memberUids.size() >= 1 &&
+        data.memberUids.size() <= 4 &&
+        data.memberUids[0] is string &&
+        data.memberSummaries is list &&
+        data.memberSummaries.size() >= 1 &&
+        data.memberSummaries.size() <= 4 &&
+        data.memberSummaries[0] is string &&
+        isValidString(data.lastActionText, 0, 220) &&
+        data.createdAt is number &&
+        data.updatedAt is number;
+    }
+
+    function isValidCoopHeistUpdate(newData, oldData) {
+      return oldData.status != 'completed' &&
+        newData.hostUid == oldData.hostUid &&
+        newData.hostName == oldData.hostName &&
+        newData.templateId == oldData.templateId &&
+        newData.title == oldData.title &&
+        newData.difficulty == oldData.difficulty &&
+        newData.bossName == oldData.bossName &&
+        newData.maxPlayers == oldData.maxPlayers &&
+        newData.bossMaxHp == oldData.bossMaxHp &&
+        newData.createdAt == oldData.createdAt &&
+        (
+          // Action 1: Join recruiting squad (up to 4)
+          (
+            oldData.status == 'recruiting' &&
+            !(request.auth.uid in oldData.memberUids) &&
+            oldData.memberUids.size() < 4 &&
+            newData.memberUids.size() == oldData.memberUids.size() + 1 &&
+            (request.auth.uid in newData.memberUids) &&
+            newData.memberSummaries.size() == oldData.memberSummaries.size() + 1 &&
+            newData.status == 'recruiting' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'memberUids', 'memberSummaries', 'lastActionText', 'updatedAt'
+            ])
+          ) ||
+          // Action 2: Host launches heist once >= 2 operatives joined
+          (
+            oldData.status == 'recruiting' &&
+            oldData.hostUid == request.auth.uid &&
+            oldData.memberUids.size() >= 2 &&
+            newData.status == 'active' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'lastActionText', 'updatedAt'
+            ])
+          ) ||
+          // Action 3: Squad member strikes heist guardian
+          (
+            oldData.status == 'active' &&
+            (request.auth.uid in oldData.memberUids) &&
+            newData.memberUids == oldData.memberUids &&
+            newData.memberSummaries.size() == oldData.memberSummaries.size() &&
+            newData.bossCurrentHp < oldData.bossCurrentHp &&
+            newData.bossCurrentHp >= 0 &&
+            (
+              (newData.status == 'active' && newData.bossCurrentHp > 0) ||
+              (newData.status == 'completed' && newData.bossCurrentHp == 0)
+            ) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'bossCurrentHp', 'phase', 'status', 'memberSummaries', 'lastActionText', 'updatedAt'
+            ])
+          )
+        );
+    }
+
+    // ===============================================================
+    // Collections
+    // ===============================================================
+
+    // Connectivity probe doc
+    match /test/connection {
+      allow read: if isAuthenticated();
+    }
+
+    // Private PII users doc
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && isValidUserProfile(request.resource.data) && (request.resource.data.role == 'player' || isAdmin());
+      allow update: if (isOwner(userId) && isValidUserProfile(request.resource.data) && request.resource.data.role == resource.data.role) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Owner-private RPG full save state
+    match /operatives/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if false;
+      allow create: if isOwner(userId) && isValidOperativeSave(request.resource.data);
+      allow update: if isOwner(userId) && isValidOperativeSave(request.resource.data);
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // Public non-PII operative stats (Leaderboard & PvP Vault Targets)
+    match /public_operatives/{userId} {
+      allow get, list: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidPublicOperative(request.resource.data);
+      allow update: if isOwner(userId) && isValidPublicOperative(request.resource.data);
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // Clans & subcollections
+    match /clans/{clanId} {
+      allow get, list: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidClanCreate(request.resource.data);
+      allow update: if isAuthenticated() && (isClanMember(clanId) || request.resource.data.memberCount == resource.data.memberCount + 1) && isValidClanUpdate(request.resource.data, resource.data);
+      allow delete: if isClanLeader(clanId) || isAdmin();
+
+      match /members/{memberUid} {
+        allow get, list: if isAuthenticated();
+        allow create: if isOwner(memberUid) && isValidClanMember(request.resource.data, memberUid) &&
+          (request.resource.data.role == 'member' || isClanLeader(clanId));
+        allow update: if (isOwner(memberUid) && isValidClanMember(request.resource.data, memberUid) && request.resource.data.role == resource.data.role) || isClanLeader(clanId);
+        allow delete: if isOwner(memberUid) || isClanLeader(clanId) || isAdmin();
+      }
+
+      match /messages/{messageId} {
+        allow get, list: if isClanMember(clanId);
+        allow create: if isClanMember(clanId) && isValidClanMessage(request.resource.data);
+        allow update, delete: if false;
+      }
+
+      match /raid_boss/{bossDocId} {
+        allow get, list: if isClanMember(clanId);
+        allow create: if isClanMember(clanId) && isValidClanRaidBoss(request.resource.data);
+        allow update: if isClanMember(clanId) && isValidClanRaidBoss(request.resource.data) && (
+          request.resource.data.cycle == resource.data.cycle ||
+          request.resource.data.cycle == resource.data.cycle + 1
+        );
+        allow delete: if isClanLeader(clanId) || isAdmin();
+      }
+
+      match /raid_damage/{userId} {
+        allow get, list: if isClanMember(clanId);
+        allow create, update: if isClanMember(clanId) && isOwner(userId) && isValidClanRaidDamage(request.resource.data, userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // Player-to-Player Auction House
+    match /auction_listings/{listingId} {
+      allow get, list: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidAuctionCreate(request.resource.data);
+      allow update: if isAuthenticated() && isValidAuctionUpdate(request.resource.data, resource.data);
+      allow delete: if (isAuthenticated() && resource.data.sellerUid == request.auth.uid && resource.data.status == 'open') || isAdmin();
+    }
+
+    // Live Timed Countdown Auctions
+    match /timed_auctions/{auctionId} {
+      allow get, list: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidTimedAuctionCreate(request.resource.data);
+      allow update: if isAuthenticated() && isValidTimedAuctionUpdate(request.resource.data, resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Bounty Board (Hitlist)
+    match /bounties/{bountyId} {
+      allow get, list: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidBountyCreate(request.resource.data);
+      allow update: if isAuthenticated() && isValidBountyUpdate(request.resource.data, resource.data);
+      allow delete: if (isAuthenticated() && resource.data.posterUid == request.auth.uid && resource.data.status == 'open') || isAdmin();
+    }
+
+    // Seasonal Hall of Fame
+    match /season_hall/{seasonKey} {
+      allow get, list: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidSeasonHallEntry(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    // Referral Redemptions (One per player UID)
+    match /referrals/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && isValidReferralClaim(request.resource.data, userId);
+      allow update, delete: if isAdmin();
+    }
+
+    // Contested City Territory Sectors
+    match /territory_sectors/{sectorId} {
+      allow get, list: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidSectorWrite(request.resource.data, null);
+      allow update: if isAuthenticated() && isValidSectorWrite(request.resource.data, resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // PvP Incoming Raid, Auction, Bounty & Referral Notifications
+    match /pvp_alerts/{alertId} {
+      allow get, list: if isAuthenticated() && (
+        resource.data.targetUid == request.auth.uid ||
+        resource.data.attackerUid == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && isValidPvpAlertCreate(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.targetUid == request.auth.uid &&
+        isValidPvpAlertResolve(request.resource.data, resource.data);
+      allow delete: if isAuthenticated() && (resource.data.targetUid == request.auth.uid || isAdmin());
+    }
+
+    // Co-op Server-Wide World Boss
+    match /server_boss/{bossDocId} {
+      allow get, list: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidServerBoss(request.resource.data);
+      allow update: if isAuthenticated() && isValidServerBoss(request.resource.data) && (
+        request.resource.data.cycle == resource.data.cycle ||
+        request.resource.data.cycle == resource.data.cycle + 1
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Co-op Server Boss Damage Contributions
+    match /server_boss_damage/{userId} {
+      allow get, list: if isAuthenticated();
+      allow create, update: if isOwner(userId) && isValidServerBossDamage(request.resource.data, userId);
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // Global City Chat Channel
+    match /global_chat/{messageId} {
+      allow get, list: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidGlobalChatMessage(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    // Formal 24-Hour Clan vs Clan Wars
+    match /clan_wars/{warId} {
+      allow get, list: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidClanWarCreate(request.resource.data) && isClanMember(request.resource.data.challengerClanId);
+      allow update: if isAuthenticated() && isValidClanWarUpdate(request.resource.data, resource.data) &&
+        (isClanMember(resource.data.challengerClanId) || isClanMember(resource.data.defenderClanId));
+      allow delete: if isAdmin();
+    }
+
+    // Live 1v1 PvP Duel Rooms
+    match /live_duels/{duelId} {
+      allow get: if isAuthenticated() && isValidId(duelId);
+      allow list: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidId(duelId) &&
+        isValidLiveDuel(request.resource.data) &&
+        request.resource.data.challengerUid == request.auth.uid &&
+        request.resource.data.status == 'open' &&
+        request.resource.data.winnerUid == '' &&
+        request.resource.data.challengerAction == '' &&
+        request.resource.data.opponentAction == '' &&
+        request.resource.data.turn == 1;
+      allow update: if isAuthenticated() && isValidId(duelId) &&
+        isValidLiveDuel(request.resource.data) &&
+        isValidLiveDuelUpdate(request.resource.data, resource.data);
+      allow delete: if isAdmin() || (
+        isAuthenticated() && isValidId(duelId) &&
+        resource.data.status == 'open' &&
+        resource.data.challengerUid == request.auth.uid
+      );
+    }
+
+    // Multiplayer 2-4 Player Co-op Heist Rooms
+    match /coop_heists/{heistId} {
+      allow get: if isAuthenticated() && isValidId(heistId);
+      allow list: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidId(heistId) &&
+        isValidCoopHeist(request.resource.data) &&
+        request.resource.data.hostUid == request.auth.uid &&
+        request.resource.data.status == 'recruiting' &&
+        request.resource.data.phase == 1 &&
+        request.resource.data.bossCurrentHp == request.resource.data.bossMaxHp &&
+        request.resource.data.memberUids.size() == 1 &&
+        request.auth.uid in request.resource.data.memberUids;
+      allow update: if isAuthenticated() && isValidId(heistId) &&
+        isValidCoopHeist(request.resource.data) &&
+        isValidCoopHeistUpdate(request.resource.data, resource.data);
+      allow delete: if isAdmin() || (
+        isAuthenticated() && isValidId(heistId) &&
+        resource.data.status == 'recruiting' &&
+        resource.data.hostUid == request.auth.uid
+      );
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

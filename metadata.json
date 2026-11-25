@@ -1,0 +1,6 @@
+{
+  "name": "صراع الفصائل والظلال | Shadow Factions RPG",
+  "description": "لعبة تقمص أدوار ليلية بنظام الفصائل السرية، المهام الزمنية، مداهمة المخازن، بناء المقر المحصن، والاقتصاد المتطور.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
